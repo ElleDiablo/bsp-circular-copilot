@@ -1,0 +1,7 @@
+[project]
+name = "bsp-circular-copilot"
+version = "0.1.0"
+description = "AI assistant that answers questions from BSP circulars, with citations, or refuses."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

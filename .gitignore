@@ -1,0 +1,13 @@
+# secrets -- env holds AWS keys and database password
+.env
+
+# rebuildable -- recreated by uv sync, so vould just be clutter so ignore
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# data and outputs -- large PDFs and aren't mine to republish -- .DS_Store is Mac junk
+data/
+evals/runs/*.csv
+.DS_Store

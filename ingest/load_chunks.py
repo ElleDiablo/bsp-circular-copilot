@@ -15,30 +15,17 @@ Needs Ollama running (`brew services start ollama`) and DATABASE_URL in .env (Su
 import csv  # standard library: reads CSV files row by row as dictionaries
 import json  # standard library: turns JSON text into Python dicts/lists and back
 import os  # standard library: os.environ holds environment variables like DATABASE_URL
-import urllib.error  # standard library: HTTPError, raised when a server answers with an error code
-import urllib.request  # standard library: sends HTTP requests (here, to Ollama); no package needed
+import urllib.error  # standard library: HTTPError, raised when Ollama answers with an error code
 from pathlib import Path  # standard library: file paths as objects, work on any OS
 
 import psycopg  # third-party Postgres driver: connect to Supabase, run SQL, commit
 
+from app.embeddings import embed, to_pgvector  # shared with search: one model
+
 CIRCULARS = Path("data/circulars.csv")  # input: catalog with title, date and URL per circular
 CHUNKS = Path("data/chunks.jsonl")  # input: one chunk per line; this file is the silver layer
 
-OLLAMA_URL = "http://localhost:11434/api/embed"  # Ollama's "text in, vectors out" endpoint on this Mac
-MODEL = "mxbai-embed-large"  # embedding model: 1024 numbers per text, at most 512 tokens per text
 BATCH = 32  # chunks per request: one request with 32 texts is much faster than 32 requests
-
-
-def embed(texts: list[str], truncate: bool = False) -> list[list[float]]:  # list of texts in, list of vectors out
-    """Send a list of texts to Ollama, get back one vector (1024 numbers) per text, same order."""
-    # truncate=False (the default here): a text over 512 tokens makes Ollama answer with an
-    # error (HTTP 400) instead of quietly embedding only its first 512 tokens.
-    body = json.dumps({"model": MODEL, "input": texts, "truncate": truncate}).encode()  # dict → JSON text → bytes (HTTP sends bytes)
-    request = urllib.request.Request(  # build the request (not sent yet)
-        OLLAMA_URL, data=body, headers={"Content-Type": "application/json"}  # having data makes it a POST; header says "this is JSON"
-    )  # end of the request
-    with urllib.request.urlopen(request, timeout=300) as response:  # send it; wait up to 300 s for the reply
-        return json.load(response)["embeddings"]  # reply is {"embeddings": [[...1024...], ...]}: return that list
 
 
 def embed_batch(batch: list[dict], truncated: list[str]) -> list[list[float]]:  # chunks in, one vector per chunk out
@@ -55,11 +42,6 @@ def embed_batch(batch: list[dict], truncated: list[str]) -> list[list[float]]:  
                 vectors.append(embed([c["text"]], truncate=True)[0])  # embed only its first 512 tokens
                 truncated.append(f"{c['circular_no']} p.{c['page']} #{c['chunk_index']}")  # note which one, e.g. "984 p.41 #0"
         return vectors  # one vector per chunk, so the batch still lines up with its vectors
-
-
-def to_pgvector(vector: list[float]) -> str:  # Python list in, text out
-    """Write a vector the way pgvector reads it as text: '[0.01,0.03,...]'."""
-    return "[" + ",".join(str(x) for x in vector) + "]"  # each number → text, joined by commas, in brackets
 
 
 def main() -> None:  # the script's entry point; returns nothing

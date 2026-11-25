@@ -23,7 +23,8 @@ OUT = Path("data/chunks.jsonl")  # output: one chunk per line (the "silver" laye
 
 # Rule of thumb: about 4 characters = 1 token in English prose, but tables of numbers can be
 # under 2 characters per token. Measured: at 1500 chars, 254 of 6,821 chunks went over the
-# 512-token limit of mxbai-embed-large / Cohere Embed v3; at 800 chars, none did.
+# 512-token limit of mxbai-embed-large / Cohere Embed v3; at 800 chars, 6 of 11,813 did, all
+# OCR garbage or dot leaders ". . . . ." (the loader truncates and lists those few).
 CHUNK_CHARS = 800  # ≈ 200 tokens of prose, still under 512 tokens for number-heavy tables
 OVERLAP_CHARS = 120  # each chunk repeats the last 120 chars of the previous one, so a cut sentence survives whole
 

@@ -20,9 +20,9 @@ import logging  # standard library: controls which warning messages libraries pr
 import shutil  # standard library: "shell utilities", here shutil.copy2() to copy files
 import sys  # standard library: sys.argv = the words you typed after the script name
 from collections import Counter  # standard library: counts things, e.g. how many "ok"
-from pathlib import Path  # standard library: file paths as objects, e.g. Path("data") / "pdfs"
+from pathlib import Path  # standard library: file paths as objects
 
-from pypdf import PdfReader  # third-party (`uv add pypdf`): opens PDFs and extracts their text
+from pypdf import PdfReader  # third-party (`uv add pypdf`): opens PDFs, extracts text
 from pypdf.errors import PdfReadError  # the error pypdf raises when a PDF is damaged
 
 # Constants (ALL_CAPS by convention = values that don't change while the script runs).

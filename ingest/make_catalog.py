@@ -5,9 +5,13 @@
 #   - data/circulars.csv        one row per circular
 #   - data/download_links.html  one link per circular
 
-import csv, html, re, sys
-from pathlib import Path
-from openpyxl import load_workbook #openpyxl is a standard py lib for read, write, manipulation Excel files
+import csv  # standard library: read/write CSV files
+import html  # standard library: html.escape() makes text safe to put in HTML
+import re  # standard library: regular expressions (patterns like "1232(corrected copy)")
+import sys  # standard library: sys.argv and sys.exit
+from pathlib import Path  # standard library: file paths as objects
+
+from openpyxl import load_workbook  # third-party (`uv add openpyxl`): reads Excel files
 
 PDF_URL = "https://www.bsp.gov.ph/Regulations/Issuances/{year}/{prefix}{number}.pdf" # template for PDF link
 NUMBER_RE = re.compile(r"^\s*(\d+)\s*(?:\((.*)\))?\s*$")

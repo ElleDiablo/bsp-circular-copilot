@@ -9,7 +9,7 @@ import csv, html, re, sys
 from pathlib import Path
 from openpyxl import load_workbook #openpyxl is a standard py lib for read, write, manipulation Excel files
 
-PDF_URL = "https://www.bsp.gov.ph/Regulations/Issuances/{year}/{number}.pdf" # template for PDF link
+PDF_URL = "https://www.bsp.gov.ph/Regulations/Issuances/{year}/{prefix}{number}.pdf" # template for PDF link
 NUMBER_RE = re.compile(r"^\s*(\d+)\s*(?:\((.*)\))?\s*$")
     # Pattern that splits "1232(corrected copy)" into "1232" and "corrected copy".
     #   ^              start of the text
@@ -20,7 +20,7 @@ NUMBER_RE = re.compile(r"^\s*(\d+)\s*(?:\((.*)\))?\s*$")
     #   \s*$           any spaces, then the end of the text
     # Plain numbers like "1242" also match; group 2 is then None.
     # re.compile() builds the pattern once so it isn't rebuilt for every row.
-
+FIRST_NEW_STYLE = 1108 # from 1108 its just the number:2026/1242.pdf
 
 # Take file path, return list of dictionaries
 def read_rows(xlsx_path:str) -> list[dict]:
@@ -42,7 +42,7 @@ def read_rows(xlsx_path:str) -> list[dict]:
             "issued_on": issued_on,
             "title": title.strip(),
             "note": (note or "").strip().lower(),
-            "source_url": PDF_URL.format(year=issued_on[:4], number=circular_no),
+            "source_url": PDF_URL.format(year=issued_on[:4], prefix="c" if int(circular_no) < FIRST_NEW_STYLE else "", number=circular_no),
         })
     return catalog
 

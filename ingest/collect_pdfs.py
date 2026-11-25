@@ -77,6 +77,9 @@ def main(download_dir: str) -> None:
         target = PDF_DIR / f"{number}.pdf"  # where it should end up: data/pdfs/1242.pdf
         found = source / f"{number}.pdf"  # where Safari saved it: ~/Downloads/1242.pdf
 
+        if not found.exists(): # older circulars downloaded as cXXXX.pdf:
+            found = source / f"c{number}.pdf"
+
         # Idempotent: if we already have it, check our copy instead of copying again.
         if target.exists():
             result = check_pdf(target)

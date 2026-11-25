@@ -25,6 +25,9 @@ OUT = Path("data/chunks.jsonl")  # output: one chunk per line (the "silver" laye
 CHUNK_CHARS = 1500  # 1500 chars ≈ 375 tokens; Cohere Embed v3 / mxbai accept at most 512 tokens
 OVERLAP_CHARS = 200  # each chunk repeats the last 200 chars of the previous one, so a cut sentence survives whole
 
+MIN_CHARS = 100 # chunks shorter than this could be page labels like "Appendix 1" so there's too little meaning to embed
+
+
 logging.getLogger("pypdf").setLevel(logging.ERROR)  # only show pypdf messages that are real errors
 
 
@@ -51,12 +54,16 @@ def main() -> None:  # the script's entry point; returns nothing
 
     total = 0  # how many chunks we wrote, for the summary
     longest = 0  # length of the longest chunk, to check we stay under the token limit
+    skipped = 0  # skipped pieces with less than 100 chars per chunk
     with OUT.open("w", encoding="utf-8") as out:  # "w" overwrites each run → no duplicates (idempotent)
         for number in numbers:  # one circular at a time
             reader = PdfReader(PDF_DIR / f"{number}.pdf")  # open data/pdfs/1242.pdf (/ joins Path parts)
             for page_no, page in enumerate(reader.pages, start=1):  # page_no counts 1, 2, 3… like real pages
                 text = page.extract_text() or ""  # extract_text() can return None on an empty page → use ""
                 for i, piece in enumerate(chunk(text)):  # i = 0, 1, 2… position of the chunk within the page
+                    if len(piece) < MIN_CHARS: # too short to mean anything
+                        skipped += 1           # skip
+                        continue
                     record = {  # one chunk, with everything needed to cite it later
                         "circular_no": number,  # which circular
                         "page": page_no,  # which page (for "BSP Circular No. X, p. N")
@@ -69,6 +76,7 @@ def main() -> None:  # the script's entry point; returns nothing
 
     print(f"{len(numbers)} circulars -> {total} chunks -> {OUT}")  # summary, e.g. 319 circulars -> 6876 chunks
     print(f"longest chunk: {longest} chars (~{longest // 4} tokens)")  # // is whole-number division
+    print(f"skipped {skipped} chunks under {MIN_CHARS} chars")
 
 
 if __name__ == "__main__":  # true only when run directly (python -m ingest.chunk_pdfs), not when imported

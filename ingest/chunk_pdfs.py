@@ -21,9 +21,11 @@ MANIFEST = Path("data/pdf_manifest.csv")  # input: one row per circular with its
 PDF_DIR = Path("data/pdfs")  # input: the PDFs collect_pdfs copied here ({number}.pdf)
 OUT = Path("data/chunks.jsonl")  # output: one chunk per line (the "silver" layer)
 
-# Rule of thumb: about 4 characters = 1 token in English.
-CHUNK_CHARS = 1500  # 1500 chars ≈ 375 tokens; Cohere Embed v3 / mxbai accept at most 512 tokens
-OVERLAP_CHARS = 200  # each chunk repeats the last 200 chars of the previous one, so a cut sentence survives whole
+# Rule of thumb: about 4 characters = 1 token in English prose, but tables of numbers can be
+# under 2 characters per token. Measured: at 1500 chars, 254 of 6,821 chunks went over the
+# 512-token limit of mxbai-embed-large / Cohere Embed v3; at 800 chars, none did.
+CHUNK_CHARS = 800  # ≈ 200 tokens of prose, still under 512 tokens for number-heavy tables
+OVERLAP_CHARS = 120  # each chunk repeats the last 120 chars of the previous one, so a cut sentence survives whole
 
 MIN_CHARS = 100 # chunks shorter than this could be page labels like "Appendix 1" so there's too little meaning to embed
 
@@ -37,11 +39,11 @@ def chunk(text: str) -> list[str]:  # takes one page's text, returns a list of c
     pieces = []  # the chunks we'll return
     start = 0  # position (character index) where the current chunk begins
     while start < len(text):  # keep going while there's text left (an empty page makes no chunks)
-        pieces.append(text[start : start + CHUNK_CHARS])  # slice: characters start .. start+1499
+        pieces.append(text[start : start + CHUNK_CHARS])  # slice: characters start .. start+799
         if start + CHUNK_CHARS >= len(text):  # this piece already reached the end of the page
             break  # so stop; otherwise we'd make a tiny chunk that's only overlap
-        start += CHUNK_CHARS - OVERLAP_CHARS  # move forward 1300, not 1500, so chunks overlap by 200
-    return pieces  # e.g. a 3000-char page → chunks starting at 0, 1300, 2600
+        start += CHUNK_CHARS - OVERLAP_CHARS  # move forward 680, not 800, so chunks overlap by 120
+    return pieces  # e.g. a 2000-char page → chunks starting at 0, 680, 1360
 
 
 def main() -> None:  # the script's entry point; returns nothing
@@ -74,7 +76,7 @@ def main() -> None:  # the script's entry point; returns nothing
                     total += 1  # count it
                     longest = max(longest, len(piece))  # remember the biggest chunk we've seen
 
-    print(f"{len(numbers)} circulars -> {total} chunks -> {OUT}")  # summary, e.g. 319 circulars -> 6876 chunks
+    print(f"{len(numbers)} circulars -> {total} chunks -> {OUT}")  # summary, e.g. 319 circulars -> 11813 chunks
     print(f"longest chunk: {longest} chars (~{longest // 4} tokens)")  # // is whole-number division
     print(f"skipped {skipped} chunks under {MIN_CHARS} chars")
 

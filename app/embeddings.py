@@ -6,10 +6,16 @@ once, means the loader and the search can never drift apart.
 """
 
 import json  # standard library: turns Python dicts into JSON text and back
+import os
 import urllib.error  # standard library: HTTPError, raised when Ollama answers with an error code
 import urllib.request  # standard library: sends HTTP requests to Ollama; no package needed
 
-OLLAMA_URL = "http://localhost:11434/api/embed"  # Ollama's "text in, vectors out" endpoint on this Mac
+# Where Ollama lives. On the Mac: localhost. Inside a container, "localhost" is the container
+# itself, so `docker run` passes OLLAMA_HOST=http://host.docker.internal:11434 (= the Mac).
+# ChatOllama reads the same variable by itself, so one setting moves chat AND embeddings.
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")  # env var if set, else this Mac
+OLLAMA_URL = f"{OLLAMA_HOST}/api/embed"  # Ollama's "text in, vectors out" endpoint
+
 MODEL = "mxbai-embed-large"  # embedding model: 1024 numbers per text, at most 512 tokens per text
 
 # mxbai-embed-large was trained to see this phrase in front of QUESTIONS (not in front of chunks).

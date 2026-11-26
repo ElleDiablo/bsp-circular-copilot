@@ -15,3 +15,12 @@ jobs:
       - run: uv sync --locked  # install exact versions from uv.lock; fail if the lock is out of date
       - run: uv run ruff check .  # lint
       - run: uv run pytest -v  # tests (no .env, no Ollama, no database needed)
+
+  docker:  # second job: runs at the same time as "test", on its own fresh machine
+    runs-on: ubuntu-latest  # Docker is already installed on GitHub's Ubuntu machines
+    steps:
+      - uses: actions/checkout@v4  # download the repo (each job starts empty)
+      - run: docker build -t bsp-circular-copilot .  # does the Dockerfile still build?
+      - run: docker run -d --rm -p 8080:8080 --name bsp bsp-circular-copilot  # start it in the background
+      - run: curl --fail --retry 10 --retry-delay 1 --retry-all-errors http://localhost:8080/health  # does it answer?
+      

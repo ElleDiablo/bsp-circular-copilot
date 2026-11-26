@@ -1,0 +1,5 @@
+SOURCE "/aws/ecs/bsp/bsp-api-6c33" START=-3h END=0s |
+fields @timestamp, @message
+| filter @message like /ask latency_ms=/
+| parse @message "latency_ms=* refused=* reason=* citations=* input_tokens=* output_tokens=*" as latency_ms, refused, reason, citations, in_tok, out_tok
+| stats count(*) as questions, avg(latency_ms) as avg_ms, max(latency_ms) as max_ms, sum(in_tok) as in_tokens, sum(out_tok) as out_tokens by refused

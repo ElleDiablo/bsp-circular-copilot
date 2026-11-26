@@ -1,4 +1,4 @@
-"""Answer a question from the BSP circulars, with citations, or refuse. (Step C: LangGraph chat model.)
+"""Answer a question from the BSP circulars, with citations, or refuse. (Step C: LangGraph.)
 
 Usage:
     uv run --env-file .env python -m app.answer "What is the maximum interest rate on credit cards?"
@@ -6,13 +6,14 @@ Usage:
 Pipeline: retrieve passages → no passages? refuse → ask the chat model with rules + passages
 → check every citation it wrote was in the passages → bad or missing citations? refuse.
 Step A talks to Ollama directly over HTTP; 
-Step B swaps that for LangChain, (
+Step B swaps that for LangChain it used ChatOllama, 
 Step C for LangGraph. ( Current )
 """
 
-
-import re
+import os  # standard library: os.environ.get reads LLM_PROVIDER
+import re  # standard library: regular expressions, to find citations in the answer text
 import sys  # for sys.argv --> list of words typed after command
+import unicodedata  # standard library: Unicode tools; normalize() turns look-alike characters into plain ones
 from typing import TypedDict  # dict with named, typed kets: the graph state
 
 from langchain_core.messages import (  # LangChain's message type
@@ -26,6 +27,9 @@ from langgraph.graph import (  # graph builder and its two special nodes
     StateGraph,
 )
 
+from app.embeddings import (
+    EMBED_PROVIDER,  # only to print which embedding engine is used
+)
 from app.retrieval import (  # from module import object passage, and search
     Passage,
     search,
@@ -52,11 +56,34 @@ def format_passages(passages: list[Passage]) -> str: # passages in, one text blo
     return "\n\n".join(f"[{p.cite()}] {p.title}\n{p.text}" for p in passages)  # blank line between passages
 
 
-llm = ChatOllama(
-    model=CHAT_MODEL,   # Local model answers (Ollama)
-    temperature=0 ,     # most likely next word
-    num_ctx=8192        # context window in tokens
-)
+
+# -- local ---
+# llm = ChatOllama(
+#     model=CHAT_MODEL,   # Local model answers (Ollama)
+#     temperature=0 ,     # most likely next word
+#     num_ctx=8192        # context window in tokens
+# )
+
+# Which provider runs the chat model: "ollama" on the Mac (default), "groq" when deployed (no Ollama in the cloud).
+# Different models (Llama 3.1 8B vs gpt-oss-20b): compare them on the evals. Bedrock later = one more branch.
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+# Groq shut down llama-3.1-8b-instant on 2026-08-16 (free/dev tiers); its named replacement is gpt-oss-20b.
+GROQ_MODEL = "openai/gpt-oss-20b"
+
+def make_llm(): # settings in, LangChain chat model out
+    """Build the chat model. Every LangChain chat model has the same .invoke(), so nothing else changes"""
+    if LLM_PROVIDER == "groq":      # if groq
+        from langchain_groq import ChatGroq  # import only if used
+        # gpt-oss is a reasoning model (thinks before answering); "low" keeps the thinking short:
+        # fewer tokens (free tier: 8K tokens/minute) and faster. Reads GROQ_API_KEY from the environment.
+        return ChatGroq(model=GROQ_MODEL, temperature=0, reasoning_effort="low")
+    return ChatOllama(        
+        model=CHAT_MODEL,   # which local model answers
+        temperature=0,      # always pick the most likely next work
+        num_ctx=8192        # context window in tokens
+    )
+
+llm = make_llm() # chat model object, created once and reused for every question 
 
 def bad_citations(answer: str, passages: list[Passage]) -> list[str]:  # answer + sources in, problems out
     """List the citations in the answer that don't match any passage we gave the model."""
@@ -65,7 +92,7 @@ def bad_citations(answer: str, passages: list[Passage]) -> list[str]:  # answer 
     return [f"BSP Circular No. {c}, p. {pg}" for c, pg in cited if (c, pg) not in allowed]  # the made-up ones
 
 
-# ----- Pipeline as LangGraph graph ------
+# ----- Step C: Pipeline as LangGraph graph ------
 # State: the shared notebook every node reads from and writes to. total=False = fields fill in as we go.
 class State(TypedDict, total=False):
     question: str  # what the user asked
@@ -89,7 +116,9 @@ def generate(state: State) -> State:
     reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), HumanMessage(user)])  # returns an AIMessage
     usage = reply.usage_metadata or {}  # LangChain's standard token counts (same keys for every provider)
     return {
-        "answer": reply.content.strip(),  # the model's answer, without leading/trailing spaces
+        # NFKC turns look-alike characters into plain ones (gpt-oss writes "No. 1242" with a narrow
+        # no-break space, which the CITATION regex wouldn't match). strip() drops leading/trailing spaces.
+        "answer": unicodedata.normalize("NFKC", reply.content).strip(),
         "tokens": {"input": usage.get("input_tokens"), "output": usage.get("output_tokens")},
     }
 
@@ -135,18 +164,14 @@ def build_graph():
     graph.add_edge("refuse", END)  # a refusal is always the last step
     return graph.compile()  # checks the wiring (e.g. no dead-end nodes) and returns a runnable graph
 
-
 pipeline = build_graph()  # build once at import, reuse for every question
-
 
 def answer(question: str) -> dict:  # question in, result (answer + what happened) out
     """Run the graph. Same input and output as Steps A and B, so callers don't change."""
     state = pipeline.invoke({"question": question})  # runs nodes until END; returns the final state
     return {k: state.get(k) for k in ("answer", "refused", "reason", "citations", "tokens")}  # drop passages
 
-
-
-
+# ----- STEP B -----
 # def answer(question: str) -> dict: # question in, (result + what happened) out
 #     """Retrieve, ask the model, check its citations. Refuse whenever there's no solid source."""
 #     passages = search(question) # up to 6 passages with similarity >= 0.55
@@ -173,8 +198,11 @@ def answer(question: str) -> dict:  # question in, result (answer + what happene
 
 def main() -> None:  # lets you try answer() from the terminal
     question = " ".join(sys.argv[1:]) or "What is the maximum interest rate on credit card balances?"  # typed words or a default
-    result = answer(question)  # run the whole pipeline
-    print(f"Q: {question}\n")  # echo the question, then a blank line
+    print(f"Q: {question}\n")  # echo the question first, so you see it while waiting
+    # Say which engines are about to run: proves the settings took effect. flush=True = show it NOW
+    # (Python otherwise holds printed text in a buffer until later).
+    print(f"Thinking... (chat: {LLM_PROVIDER}, embeddings: {EMBED_PROVIDER})\n", flush=True)
+    result = answer(question)  # run the whole pipeline (the slow part)
     print(result["answer"])  # the answer (or the refusal sentence)
     print(f"\nrefused: {result['refused']} ({result['reason']})")  # why it answered or refused
     print(f"citations: {result['citations']}")  # the sources it used

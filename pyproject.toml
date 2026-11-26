@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.165.0",
+    "fastembed>=0.9.1",
+    "langchain-groq>=1.2.1",
     "langchain-ollama>=1.2.0",
     "langgraph>=1.2.24",
     "openpyxl>=3.1.5",

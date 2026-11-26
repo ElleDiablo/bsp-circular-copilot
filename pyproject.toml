@@ -5,6 +5,7 @@ description = "AI assistant that answers questions from BSP circulars, with cita
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "langchain-ollama>=1.2.0",
     "openpyxl>=3.1.5",
     "psycopg[binary]>=3.3.9",
     "pypdf>=7.1.1",

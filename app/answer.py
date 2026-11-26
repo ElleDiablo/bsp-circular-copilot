@@ -1,4 +1,4 @@
-"""Answer a question from the BSP circulars, with citations, or refuse. (Step A: plain version.)
+"""Answer a question from the BSP circulars, with citations, or refuse. (Step B: LangChain chat model.)
 
 Usage:
     uv run --env-file .env python -m app.answer "What is the maximum interest rate on credit cards?"
@@ -8,19 +8,24 @@ Pipeline: retrieve passages → no passages? refuse → ask the chat model with 
 Step A talks to Ollama directly over HTTP; Step B swaps that for LangChain, Step C for LangGraph.
 """
 
-import json
+
 import re
 import sys  # for sys.argv --> list of words typed after command
-import urllib.request  # sends HTTP request to Ollama
+
+from langchain_core.messages import (  # LangChain's message type
+    HumanMessage,
+    SystemMessage,
+)
+from langchain_ollama import ChatOllama  # langChain's chat-model adapter for Ollama
 
 from app.retrieval import (  # from module import object passage, and search
     Passage,
     search,
 )
 
-CHAT_URL = "http://localhost:11434/api/chat"      # Ollama's chat endpoint
+# CHAT_URL = "http://localhost:11434/api/chat" -> Ollama's chat endpoint, not needed for langchain leave commented
 CHAT_MODEL = "llama3.1:8b"                        # Local chat model with 8B parameters
-REFUSAL = "I couldn't find this in the BSP circulars I have"    # One exact refusal sentence
+REFUSAL = "I couldn't find this in the BSP circulars I have."    # One exact refusal sentence
 
 # The rules go in the "system" message: instructions the model treats as the setup for the chat.
 SYSTEM_PROMPT = f"""You answer questions about Philippine banking regulations using ONLY the passages given.
@@ -38,33 +43,12 @@ def format_passages(passages: list[Passage]) -> str: # passages in, one text blo
     """Put each passage under a header the model can copy as its citation."""
     return "\n\n".join(f"[{p.cite()}] {p.title}\n{p.text}" for p in passages)  # blank line between passages
 
-# hello, meow = Passage(circular_no="1", title="hi", page=1,text="hellow words",score=1 ), Passage(circular_no="1", title="hi", page=1,text="hellow words",score=1 )
-# x = format_passages([hello,meow])
-# print(x)
 
-def chat(system: str, user:str) -> dict:
-    """Send one system + one user message to Ollama and return its JSON reply."""
-    body = json.dumps({  # the request, as JSON text
-        "model": CHAT_MODEL,  # which model answers
-        "messages": [  # the conversation so far: rules first, then the user's turn
-            {"role": "system", "content": system},  # the rules
-            {"role": "user", "content": user},  # the passages + the question
-        ],  # end of the messages
-        "stream": False, # wait for the whole answer instead of receiving it word by word
-        # temperature 0: always pick the most likely next word, so answers stay stable run to run.
-        # num_ctx 8192: context window in tokens.
-        # Ollama cuts long prompts SILENTLY 
-        "options": {"temperature":0, "num_ctx": 8192} # model settings for this request
-    }).encode() # encode turn to byes (HTTP sens bytes)
-
-    # Build the request
-    request = urllib.request.Request(
-        CHAT_URL, data=body, headers={"Content-Type":"application/json"}
-    )
-
-    # Send the request and wait 300 seconds
-    with urllib.request.urlopen(request, timeout=300) as response:  
-        return json.load(response)  # {"message": {"content": "..."}, "prompt_eval_count": ..., ...}
+llm = ChatOllama(
+    model=CHAT_MODEL,   # Local model answers (Ollama)
+    temperature=0 ,     # most likely next word
+    num_ctx=8192        # context window in tokens
+)
 
 def bad_citations(answer: str, passages: list[Passage]) -> list[str]:  # answer + sources in, problems out
     """List the citations in the answer that don't match any passage we gave the model."""
@@ -73,15 +57,17 @@ def bad_citations(answer: str, passages: list[Passage]) -> list[str]:  # answer 
     return [f"BSP Circular No. {c}, p. {pg}" for c, pg in cited if (c, pg) not in allowed]  # the made-up ones
 
 def answer(question: str) -> dict: # question in, (result + what happened) out
-    """Retrieve, ask the model, check its citations. Refues whenever there's no solid source."""
+    """Retrieve, ask the model, check its citations. Refuse whenever there's no solid source."""
     passages = search(question) # up to 6 passages with similarity >= 0.55
     if not passages:
         return {"answer": REFUSAL, "refused": True, "reason": "no passages", "citations": []}  # skip the LLM: faster, free
 
     user = f"PASSAGES:\n\n{format_passages(passages)}\n\nQUESTION: {question}"  # the user's turn
-    reply = chat(SYSTEM_PROMPT, user)  # ask the model
-    text = reply["message"]["content"].strip()  # the model's answer, without leading/trailing spaces
-    tokens = {"input": reply.get("prompt_eval_count"), "output": reply.get("eval_count")}  # for cost/latency logs later
+    
+    reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), HumanMessage(user)]) # ask model, return AI answer
+    text = reply.content.strip()            # Model answer without leading/trailing spaces
+    usage = reply.usage_metadata or {}      # LangChain standard token counts
+    tokens = {"input": usage.get("input_tokens"), "output": usage.get("output_tokens")} # For cost/latency logs later
 
     if REFUSAL in text: # model said passages don't answer it
         return {"answer": REFUSAL, "refused": True, "reason": "model refused", "citations": [], "tokens": tokens}

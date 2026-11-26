@@ -1,0 +1,19 @@
+{
+  "serviceName": "bsp-api",
+  "cluster": "bsp",
+  "executionRoleArn": "arn:aws:iam::969674340441:role/bspTaskExecutionRole",
+  "infrastructureRoleArn": "arn:aws:iam::969674340441:role/bspEcsInfrastructureRole",
+  "healthCheckPath": "/health",
+  "primaryContainer": {
+    "image": "969674340441.dkr.ecr.ap-southeast-1.amazonaws.com/bsp-circular-copilot:f6c144e",
+    "containerPort": 8080,
+    "secrets": [
+      { "name": "GROQ_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:969674340441:secret:bsp-circular-copilot/prod-x9CuHy:GROQ_API_KEY::" },
+      { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:969674340441:secret:bsp-circular-copilot/prod-x9CuHy:DATABASE_URL::" }
+    ]
+  },
+  "cpu": "1024",
+  "memory": "3072",
+  "cpuArchitecture": "ARM64",
+  "scalingTarget": { "minTaskCount": 1, "maxTaskCount": 1 }
+}

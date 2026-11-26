@@ -21,6 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4  # download the repo (each job starts empty)
       - run: docker build -t bsp-circular-copilot .  # does the Dockerfile still build?
-      - run: docker run -d --rm -p 8080:8080 --name bsp bsp-circular-copilot  # start it in the background
+      - run: docker run -d --rm -p 8080:8080 -e GROQ_API_KEY=dummy-for-ci --name bsp bsp-circular-copilot  # background; /health never calls Groq, but ChatGroq needs SOME key to start
       - run: curl --fail --retry 10 --retry-delay 1 --retry-all-errors http://localhost:8080/health  # does it answer?
       

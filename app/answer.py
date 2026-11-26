@@ -50,31 +50,6 @@ llm = ChatOllama(
     num_ctx=8192        # context window in tokens
 )
 
-"""Below is version 1 -- Simple Chat request"""
-# def chat(system: str, user:str) -> dict:
-#     """Send one system + one user message to Ollama and return its JSON reply."""
-#     body = json.dumps({  # the request, as JSON text
-#         "model": CHAT_MODEL,  # which model answers
-#         "messages": [  # the conversation so far: rules first, then the user's turn
-#             {"role": "system", "content": system},  # the rules
-#             {"role": "user", "content": user},  # the passages + the question
-#         ],  # end of the messages
-#         "stream": False, # wait for the whole answer instead of receiving it word by word
-#         # temperature 0: always pick the most likely next word, so answers stay stable run to run.
-#         # num_ctx 8192: context window in tokens.
-#         # Ollama cuts long prompts SILENTLY 
-#         "options": {"temperature":0, "num_ctx": 8192} # model settings for this request
-#     }).encode() # encode turn to bytes (HTTP sends bytes)
-
-#     # Build the request
-#     request = urllib.request.Request(
-#         CHAT_URL, data=body, headers={"Content-Type":"application/json"}
-#     )
-
-#     # Send the request and wait 300 seconds
-#     with urllib.request.urlopen(request, timeout=300) as response:  
-#         return json.load(response)  # {"message": {"content": "..."}, "prompt_eval_count": ..., ...}
-
 def bad_citations(answer: str, passages: list[Passage]) -> list[str]:  # answer + sources in, problems out
     """List the citations in the answer that don't match any passage we gave the model."""
     allowed = {(p.circular_no, str(p.page)) for p in passages}  # e.g. {("1242", "1"), ("1165", "1")}
@@ -93,11 +68,6 @@ def answer(question: str) -> dict: # question in, (result + what happened) out
     text = reply.content.strip()            # Model answer without leading/trailing spaces
     usage = reply.usage_metadata or {}      # LangChain standard token counts
     tokens = {"input": usage.get("input_tokens"), "output": usage.get("output_tokens")} # For cost/latency logs later
-
-    """ V1 """    
-    # reply = chat(SYSTEM_PROMPT, user)  # ask the model
-    # text = reply["message"]["content"].strip()  # the model's answer, without leading/trailing spaces
-    # tokens = {"input": reply.get("prompt_eval_count"), "output": reply.get("eval_count")}  # for cost/latency logs later
 
     if REFUSAL in text: # model said passages don't answer it
         return {"answer": REFUSAL, "refused": True, "reason": "model refused", "citations": [], "tokens": tokens}

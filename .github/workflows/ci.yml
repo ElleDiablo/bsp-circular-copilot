@@ -1,0 +1,17 @@
+# CI: on every push to main and every pull request, check the code on a fresh Linux machine.
+name: CI
+
+on:
+  push:
+    branches: [main]  # after a merge
+  pull_request:  # on every PR, before you merge
+
+jobs:
+  test:
+    runs-on: ubuntu-latest  # a fresh GitHub-hosted Linux machine each run
+    steps:
+      - uses: actions/checkout@v4  # download the repo onto the machine
+      - uses: astral-sh/setup-uv@v6  # install uv (it installs Python for us)
+      - run: uv sync --locked  # install exact versions from uv.lock; fail if the lock is out of date
+      - run: uv run ruff check .  # lint
+      - run: uv run pytest -v  # tests (no .env, no Ollama, no database needed)

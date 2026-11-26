@@ -1,0 +1,17 @@
+# .dockerignore: files Docker must NOT send into the build (like .gitignore, but for images).
+# Secrets: the image may be pushed to a registry later; keys are passed at run time instead.
+.env
+# Rebuildable or Mac-only: the image builds its own .venv (Linux, not macOS).
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+# Not needed to SERVE answers: PDFs/chunks already live in Supabase; git history, CI, tests.
+data/
+.git/
+.github/
+tests/
+evals/
+ingest/
+db/
